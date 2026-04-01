@@ -1,4 +1,4 @@
-name: ci-cd-eb
+name: ci-cd-eb-v2
 
 on:
   push:
@@ -7,7 +7,8 @@ on:
 
 env:
   EB_APP: ${{ vars.EB_APP }}
-  EB_ENV: ${{ vars.EB_ENV }}
+  EB_ENV_PROD: ${{ vars.EB_ENV_PROD }}
+  EB_ENV_STAGING: ${{ vars.EB_ENV_STAGING }}
   AWS_REGION: ${{ secrets.AWS_REGION }}
 
 jobs:
@@ -32,7 +33,7 @@ jobs:
           name: eb-bundle
           path: bundle.zip
 
-  deploy:
+  deploy_staging:
     needs: build_test_package
     runs-on: ubuntu-latest
     steps:
@@ -44,13 +45,41 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Deploy to Elastic Beanstalk
+      - name: Deploy Staging to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v21
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           application_name: ${{ env.EB_APP }}
-          environment_name: ${{ env.EB_ENV }}
-          version_label: ${{ github.sha }}
+          environment_name: ${{ env.EB_ENV_STAGING }}
+          version_label: staging-${{ github.sha }}
           region: ${{ env.AWS_REGION }}
           deployment_package: bundle.zip
+      - name: Health check staging
+        run: curl -fsSL "http://catalinstaging.eu-west-3.elasticbeanstalk.com/api/health"
+
+  deploy_prod:
+    needs: deploy_staging
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: eb-bundle
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Deploy Prod to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v21
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: ${{ env.EB_APP }}
+          environment_name: ${{ env.EB_ENV_PROD }}
+          version_label: prod-${{ github.sha }}
+          region: ${{ env.AWS_REGION }}
+          deployment_package: bundle.zip
+      - name: Health check prod
+        run: curl -fsSL "http://catalinprod.eu-west-3.elasticbeanstalk.com/api/health"
