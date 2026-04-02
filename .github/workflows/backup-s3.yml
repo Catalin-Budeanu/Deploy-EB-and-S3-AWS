@@ -2,8 +2,8 @@ name: backup-to-s3
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '* * * * *'
+  # schedule:
+  #   - cron: '* * * * *'
 
 jobs:
   backup:
